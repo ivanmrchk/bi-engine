@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Local Business Intelligence Engine</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Local Business Intelligence Engine</h1>
+    <p class="subtitle">Synthetic multi-location demo &mdash; hot services, lagging locations, and an AI-generated monthly brief.</p>
+  </header>
+
+  <section class="controls">
+    <label>Month <input id="month-input" type="text" placeholder="2026-08" /></label>
+    <label>Location <input id="location-input" type="text" placeholder="austin-tx" /></label>
+    <button id="load-btn">Load analysis</button>
+    <button id="brief-btn">Generate brief</button>
+  </section>
+
+  <section class="panel">
+    <h2>Hot services this month</h2>
+    <div id="hot-services-table"><p class="empty">Load a month to see data.</p></div>
+  </section>
+
+  <section class="panel">
+    <h2>Lagging locations vs. prior month</h2>
+    <div id="lagging-table"><p class="empty">Load a month to see data.</p></div>
+  </section>
+
+  <section class="panel">
+    <h2>Monthly brief</h2>
+    <pre id="brief-output" class="empty">Pick a location and month, then click "Generate brief".</pre>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+app = "bi-engine-web"
+primary_region = "dfw"
+
+[env]
+  API_UPSTREAM = "bi-engine-api.internal:8000"
+
+[http_service]
+  internal_port = 80
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
