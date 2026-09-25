@@ -8,3 +8,6 @@ node_modules/
 *.log
 .venv/
 dist/
+
+# Generated synthetic data (reproducible from the generator with a fixed seed)
+data/
