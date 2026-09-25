@@ -31,6 +31,23 @@ BUSY_SEASON_BOOST = 1.6
 # (a spouse's cell, a landline). Calls from that number are harder to attribute.
 SECOND_PHONE_SHARE = 0.15
 
+# Share of leads that come from someone who has hired the company before.
+RETURNING_CUSTOMER_SHARE = 0.20
+
+# What eventually happens to a lead. Only "completed" leads count toward
+# JOBS_PER_MONTH, so the generator creates more leads than jobs.
+LEAD_OUTCOME_SHARES = {
+    "lost": 0.30,           # never booked (price shopping, went elsewhere)
+    "canceled": 0.10,       # booked, then canceled before the visit
+    "estimate_only": 0.14,  # paid for the visit, declined the work
+    "completed": 0.46,      # the work was done and invoiced
+}
+
+ESTIMATE_VISIT_FEE_DOLLARS = 99
+
+# No real job is invoiced below this; smaller totals are estimate-only visits.
+MINIMUM_JOB_TICKET_DOLLARS = 150
+
 
 @dataclass(frozen=True)
 class ServiceArea:
@@ -57,6 +74,28 @@ class Service:
     ticket_price_spread: float
     busiest_months: tuple[int, ...]
 
+
+@dataclass(frozen=True)
+class MarketingChannel:
+    """How a lead found the company.
+
+    Channel mix shifts over time, so each share is given at the start and
+    the end of the three years and interpolated in between.
+    """
+
+    name: str
+    share_at_start: float
+    share_at_end: float
+    phone_call_share: float  # the rest submit a web form
+
+
+MARKETING_CHANNELS = (
+    MarketingChannel("google_business_profile", 0.38, 0.32, 0.80),
+    MarketingChannel("organic_search", 0.27, 0.22, 0.50),
+    MarketingChannel("google_ads", 0.15, 0.14, 0.60),
+    MarketingChannel("referral", 0.20, 0.17, 0.90),
+    MarketingChannel("chatgpt", 0.00, 0.15, 0.30),  # AI search arrives
+)
 
 SERVICE_AREAS = (
     ServiceArea("Issaquah", ("98027", "98029"), "425", 0.30),
