@@ -13,10 +13,6 @@ COMPANY_NAME = "Brightwire Electric"  # fictional
 FIRST_MONTH = date(2023, 9, 1)
 LAST_MONTH = date(2026, 8, 1)
 
-# The business grows over the three years, roughly linearly.
-JOBS_PER_MONTH_AT_START = 18
-JOBS_PER_MONTH_AT_END = 42
-
 # Company-wide demand by calendar month (1.0 = a normal month).
 # Winter storms and cold snaps drive December and January; February is quiet.
 MONTHLY_DEMAND_MULTIPLIER = {
@@ -35,7 +31,7 @@ SECOND_PHONE_SHARE = 0.15
 RETURNING_CUSTOMER_SHARE = 0.20
 
 # What eventually happens to a lead. Only "completed" leads count toward
-# JOBS_PER_MONTH, so the generator creates more leads than jobs.
+# a location's jobs per month, so the generator creates more leads than jobs.
 LEAD_OUTCOME_SHARES = {
     "lost": 0.30,           # never booked (price shopping, went elsewhere)
     "canceled": 0.10,       # booked, then canceled before the visit
@@ -51,12 +47,28 @@ MINIMUM_JOB_TICKET_DOLLARS = 150
 
 @dataclass(frozen=True)
 class ServiceArea:
-    """A city the company serves from its single shop."""
+    """A city served by one of the company's locations."""
 
     city: str
     zip_codes: tuple[str, ...]
     phone_area_code: str
-    share_of_customers: float
+    share_of_location_customers: float
+
+
+@dataclass(frozen=True)
+class Location:
+    """A shop with its own phone line and the cities it serves.
+
+    Completed jobs per month grow linearly from the month the location
+    opened (or the first simulated month) to the last simulated month.
+    """
+
+    name: str
+    business_phone_number: str  # the line customers dial, E.164
+    opened_month: date
+    jobs_per_month_when_opened: float
+    jobs_per_month_at_end: float
+    service_areas: tuple[ServiceArea, ...]
 
 
 @dataclass(frozen=True)
@@ -89,27 +101,50 @@ class MarketingChannel:
     phone_call_share: float  # the rest submit a web form
 
 
+EASTSIDE = Location(
+    name="Eastside",
+    business_phone_number="+14255550100",
+    opened_month=FIRST_MONTH,  # open long before the simulation starts
+    jobs_per_month_when_opened=18,
+    jobs_per_month_at_end=40,
+    service_areas=(
+        ServiceArea("Issaquah", ("98027", "98029"), "425", 0.31),
+        ServiceArea("Sammamish", ("98074", "98075"), "425", 0.20),
+        ServiceArea("Bellevue", ("98004", "98005", "98006", "98007", "98008"), "425", 0.12),
+        ServiceArea("Renton", ("98055", "98056", "98058", "98059"), "425", 0.09),
+        ServiceArea("Seattle", ("98103", "98105", "98107", "98115", "98117", "98118"), "206", 0.08),
+        ServiceArea("Redmond", ("98052", "98053"), "425", 0.05),
+        ServiceArea("Kirkland", ("98033", "98034"), "425", 0.04),
+        ServiceArea("Snoqualmie", ("98065",), "425", 0.04),
+        ServiceArea("North Bend", ("98045",), "425", 0.03),
+        ServiceArea("Mercer Island", ("98040",), "206", 0.02),
+        ServiceArea("Maple Valley", ("98038",), "425", 0.02),
+    ),
+)
+
+SOUTH_SOUND = Location(
+    name="South Sound",
+    business_phone_number="+12535550100",
+    opened_month=date(2026, 3, 1),  # the new location, still ramping up
+    jobs_per_month_when_opened=3,
+    jobs_per_month_at_end=14,
+    service_areas=(
+        ServiceArea("Kent", ("98030", "98031", "98032"), "253", 0.30),
+        ServiceArea("Auburn", ("98001", "98002", "98092"), "253", 0.20),
+        ServiceArea("Federal Way", ("98003", "98023"), "253", 0.20),
+        ServiceArea("Tacoma", ("98402", "98405", "98406", "98407"), "253", 0.18),
+        ServiceArea("Puyallup", ("98371", "98372", "98373", "98374", "98375"), "253", 0.12),
+    ),
+)
+
+LOCATIONS = (EASTSIDE, SOUTH_SOUND)
+
 MARKETING_CHANNELS = (
     MarketingChannel("google_business_profile", 0.38, 0.32, 0.80),
     MarketingChannel("organic_search", 0.27, 0.22, 0.50),
     MarketingChannel("google_ads", 0.15, 0.14, 0.60),
     MarketingChannel("referral", 0.20, 0.17, 0.90),
     MarketingChannel("chatgpt", 0.00, 0.15, 0.30),  # AI search arrives
-)
-
-SERVICE_AREAS = (
-    ServiceArea("Issaquah", ("98027", "98029"), "425", 0.30),
-    ServiceArea("Sammamish", ("98074", "98075"), "425", 0.19),
-    ServiceArea("Bellevue", ("98004", "98005", "98006", "98007", "98008"), "425", 0.12),
-    ServiceArea("Renton", ("98055", "98056", "98058", "98059"), "425", 0.09),
-    ServiceArea("Seattle", ("98103", "98105", "98107", "98115", "98117", "98118"), "206", 0.08),
-    ServiceArea("Redmond", ("98052", "98053"), "425", 0.05),
-    ServiceArea("Kirkland", ("98033", "98034"), "425", 0.04),
-    ServiceArea("Snoqualmie", ("98065",), "425", 0.04),
-    ServiceArea("North Bend", ("98045",), "425", 0.03),
-    ServiceArea("Kent", ("98030", "98031", "98032"), "253", 0.03),
-    ServiceArea("Mercer Island", ("98040",), "206", 0.02),
-    ServiceArea("Maple Valley", ("98038",), "425", 0.01),
 )
 
 SERVICES = (

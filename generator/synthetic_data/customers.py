@@ -11,7 +11,7 @@ from itertools import count
 
 from faker import Faker
 
-from synthetic_data.calibration import SECOND_PHONE_SHARE, SERVICE_AREAS, ServiceArea
+from synthetic_data.calibration import LOCATIONS, SECOND_PHONE_SHARE, Location, ServiceArea
 
 
 @dataclass(frozen=True)
@@ -22,6 +22,7 @@ class Customer:
     email: str
     phone_numbers: tuple[str, ...]  # E.164 format (+14255550142), primary first
     street_address: str
+    location: Location
     service_area: ServiceArea
     zip_code: str
 
@@ -31,16 +32,17 @@ class Customer:
 
 
 class CustomerFactory:
-    """Creates believable, unique customers spread across the service areas."""
+    """Creates believable, unique customers spread across a location's cities."""
 
     def __init__(self, randomness: random.Random, fake: Faker):
         self._randomness = randomness
         self._fake = fake
         self._next_customer_number = count(start=1)
-        self._phone_numbers_in_use: set[str] = set()
+        # Business lines are taken, so no customer can share one.
+        self._phone_numbers_in_use = {location.business_phone_number for location in LOCATIONS}
 
-    def create_customer(self) -> Customer:
-        service_area = self._pick_service_area()
+    def create_customer(self, location: Location) -> Customer:
+        service_area = self._pick_service_area(location)
         first_name = self._fake.first_name()
         last_name = self._fake.last_name()
 
@@ -55,13 +57,14 @@ class CustomerFactory:
             email=self._email_for(first_name, last_name),
             phone_numbers=tuple(phone_numbers),
             street_address=self._fake.street_address(),
+            location=location,
             service_area=service_area,
             zip_code=self._randomness.choice(service_area.zip_codes),
         )
 
-    def _pick_service_area(self) -> ServiceArea:
-        weights = [area.share_of_customers for area in SERVICE_AREAS]
-        return self._randomness.choices(SERVICE_AREAS, weights=weights)[0]
+    def _pick_service_area(self, location: Location) -> ServiceArea:
+        weights = [area.share_of_location_customers for area in location.service_areas]
+        return self._randomness.choices(location.service_areas, weights=weights)[0]
 
     def _new_phone_number(self, area_code: str) -> str:
         """A unique number on the 555 exchange, which is reserved for fiction."""

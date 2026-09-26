@@ -22,8 +22,13 @@ def simulated_months() -> list[date]:
 
 def progress_through_history(month: date) -> float:
     """0.0 for the first simulated month, 1.0 for the last one."""
-    months_elapsed = _months_between(FIRST_MONTH, month)
-    total_months = _months_between(FIRST_MONTH, LAST_MONTH)
+    return progress_since(FIRST_MONTH, month)
+
+
+def progress_since(start_month: date, month: date) -> float:
+    """0.0 at start_month, rising steadily to 1.0 at the last simulated month."""
+    months_elapsed = _months_between(start_month, month)
+    total_months = _months_between(start_month, LAST_MONTH)
     return months_elapsed / total_months
 
 

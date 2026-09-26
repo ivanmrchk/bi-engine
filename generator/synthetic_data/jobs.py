@@ -16,20 +16,21 @@ from itertools import count
 from synthetic_data.calibration import (
     BUSY_SEASON_BOOST,
     ESTIMATE_VISIT_FEE_DOLLARS,
-    JOBS_PER_MONTH_AT_END,
-    JOBS_PER_MONTH_AT_START,
     LEAD_OUTCOME_SHARES,
+    LOCATIONS,
     MARKETING_CHANNELS,
     MINIMUM_JOB_TICKET_DOLLARS,
     MONTHLY_DEMAND_MULTIPLIER,
     RETURNING_CUSTOMER_SHARE,
     SERVICES,
+    Location,
     MarketingChannel,
     Service,
 )
 from synthetic_data.customers import Customer, CustomerFactory
 from synthetic_data.timeline import (
     blend,
+    progress_since,
     progress_through_history,
     random_moment_in_month,
     simulated_months,
@@ -83,35 +84,45 @@ class CompanyHistoryGenerator:
         self._customer_factory = customer_factory
 
     def generate(self) -> CompanyHistory:
-        self._customers: list[Customer] = []
+        self._customers_by_location: dict[str, list[Customer]] = {
+            location.name: [] for location in LOCATIONS
+        }
         self._next_lead_number = count(start=1)
         self._next_job_number = count(start=1)
         leads: list[Lead] = []
         jobs: list[Job] = []
 
         for month in simulated_months():
-            for _ in range(self._lead_count_for(month)):
-                lead = self._create_lead(month)
-                leads.append(lead)
-                if lead.outcome is not LeadOutcome.LOST:
-                    jobs.append(self._create_job(lead))
+            for location in LOCATIONS:
+                if month < location.opened_month:
+                    continue
+                for _ in range(self._lead_count_for(location, month)):
+                    lead = self._create_lead(location, month)
+                    leads.append(lead)
+                    if lead.outcome is not LeadOutcome.LOST:
+                        jobs.append(self._create_job(lead))
 
-        return CompanyHistory(tuple(self._customers), tuple(leads), tuple(jobs))
+        all_customers = [
+            customer
+            for location_customers in self._customers_by_location.values()
+            for customer in location_customers
+        ]
+        return CompanyHistory(tuple(all_customers), tuple(leads), tuple(jobs))
 
     # --- How many leads, and what kind -----------------------------------
 
-    def _lead_count_for(self, month) -> int:
-        progress = progress_through_history(month)
-        expected_jobs = blend(JOBS_PER_MONTH_AT_START, JOBS_PER_MONTH_AT_END, progress)
+    def _lead_count_for(self, location: Location, month) -> int:
+        progress = progress_since(location.opened_month, month)
+        expected_jobs = blend(location.jobs_per_month_when_opened, location.jobs_per_month_at_end, progress)
         expected_jobs *= MONTHLY_DEMAND_MULTIPLIER[month.month]
         expected_leads = expected_jobs / LEAD_OUTCOME_SHARES[LeadOutcome.COMPLETED]
         return round(expected_leads * self._randomness.uniform(0.9, 1.1))
 
-    def _create_lead(self, month) -> Lead:
+    def _create_lead(self, location: Location, month) -> Lead:
         marketing_channel = self._pick_marketing_channel(month)
         return Lead(
             lead_id=f"lead_{next(self._next_lead_number):05d}",
-            customer=self._pick_customer(),
+            customer=self._pick_customer(location),
             service=self._pick_service(month),
             marketing_channel=marketing_channel,
             contact_method=self._pick_contact_method(marketing_channel),
@@ -119,11 +130,12 @@ class CompanyHistoryGenerator:
             outcome=self._pick_outcome(),
         )
 
-    def _pick_customer(self) -> Customer:
-        if self._customers and self._randomness.random() < RETURNING_CUSTOMER_SHARE:
-            return self._randomness.choice(self._customers)
-        new_customer = self._customer_factory.create_customer()
-        self._customers.append(new_customer)
+    def _pick_customer(self, location: Location) -> Customer:
+        location_customers = self._customers_by_location[location.name]
+        if location_customers and self._randomness.random() < RETURNING_CUSTOMER_SHARE:
+            return self._randomness.choice(location_customers)
+        new_customer = self._customer_factory.create_customer(location)
+        location_customers.append(new_customer)
         return new_customer
 
     def _pick_service(self, month) -> Service:
