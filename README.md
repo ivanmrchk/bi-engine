@@ -1,12 +1,12 @@
 # Local Business Intelligence Engine
 
 A portfolio project demonstrating an end-to-end pattern from real client work:
-land raw, JSON-shaped data from multiple sources (Google Business Profile,
-Search Console, call tracking, CRM/revenue) into Postgres, analyze it for
+land raw data from multiple sources (Housecall Pro CRM, Grasshopper call
+logs, website form leads, Google Search Console) into Postgres, analyze it for
 business signal ("what's hot, what's lagging"), and layer retrieval-augmented
 generation on top to turn the numbers into a plain-English brief.
 
-Built with synthetic, multi-location data — see `apps/api/scripts/generate_synthetic_data.py`.
+Built with synthetic, multi-location data — see [`generator/`](generator/README.md).
 No real client data or branding is used anywhere in this repo.
 
 ## Architecture
@@ -41,15 +41,15 @@ docker compose up --build
 - API: http://localhost:8000/docs
 - Dashboard: http://localhost:8080
 
-Seed some synthetic data:
+Generate the synthetic raw data (written to `data/`, which is git-ignored):
 
 ```bash
-cd apps/api
+cd generator
 pip install -r requirements.txt
-API_URL=http://localhost:8000 python scripts/generate_synthetic_data.py
+python -m synthetic_data
 ```
 
-Then open the dashboard, enter a month like `2026-08`, and load it.
+Loading that data into the API is the ingestion layer, currently in progress.
 
 ## Deploy to Fly.io
 
