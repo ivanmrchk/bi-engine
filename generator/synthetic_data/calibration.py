@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import date
 
 COMPANY_NAME = "Brightwire Electric"  # fictional
+COMPANY_WEBSITE = "https://www.brightwire-electric.example"  # .example is reserved, never real
 
 FIRST_MONTH = date(2023, 9, 1)
 LAST_MONTH = date(2026, 8, 1)

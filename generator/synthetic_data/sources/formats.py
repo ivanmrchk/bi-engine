@@ -5,7 +5,14 @@ spelling. Real exports don't, and these helpers reproduce that mess.
 """
 
 import random
+import re
 from datetime import datetime, timezone
+
+
+def url_slug(text: str) -> str:
+    """'Outlet & Switch Installation' -> 'outlet-and-switch-installation'."""
+    text = text.lower().replace("&", "and")
+    return re.sub(r"[^a-z0-9]+", "-", text).strip("-")
 
 
 def utc_timestamp(moment: datetime | None) -> str | None:

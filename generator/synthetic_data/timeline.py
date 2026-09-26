@@ -32,6 +32,12 @@ def progress_since(start_month: date, month: date) -> float:
     return months_elapsed / total_months
 
 
+def add_months(month: date, count: int) -> date:
+    """The first day of the month `count` months later (or earlier, if negative)."""
+    months_since_year_zero = month.year * 12 + (month.month - 1) + count
+    return date(months_since_year_zero // 12, months_since_year_zero % 12 + 1, 1)
+
+
 def blend(start_value: float, end_value: float, progress: float) -> float:
     """The value `progress` of the way from start_value to end_value."""
     return start_value + (end_value - start_value) * progress

@@ -9,16 +9,15 @@ submissions is spam, and none of that is labeled.
 
 import json
 import random
-import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from synthetic_data.calibration import COMPANY_WEBSITE
 from synthetic_data.jobs import CompanyHistory, ContactMethod, Lead
-from synthetic_data.sources.formats import phone_as_typed_by_a_person
+from synthetic_data.sources.formats import phone_as_typed_by_a_person, url_slug
 from synthetic_data.timeline import BUSINESS_TIMEZONE, random_moment_in_month
 
 PAGE_SIZE = 100
-SITE_URL = "https://www.brightwire-electric.example"  # .example is reserved, never real
 
 QUICK_QUOTE_FORM_ID = 101
 CONTACT_FORM_ID = 205
@@ -122,7 +121,7 @@ def _real_submission(lead: Lead, randomness: random.Random) -> _Submission:
         "session_navigation": json.dumps(_pages_visited(entry_page, submit_page)),
         "entry_page": entry_page,
         "submit_page": submit_page,
-        "page_url": f"{SITE_URL}{submit_page}",
+        "page_url": f"{COMPANY_WEBSITE}{submit_page}",
         "ip_address": _documentation_ip_address(randomness),
         "user_agent": randomness.choice(USER_AGENTS),
         "mail_status": "sent",
@@ -162,8 +161,8 @@ def _acquisition_params(lead: Lead, randomness: random.Random) -> dict:
     nulls, because that's how the plugin stores a parameter that wasn't there."""
     params = dict.fromkeys(ACQUISITION_PARAM_NAMES, "")
     channel = lead.marketing_channel.name
-    service_slug = _slug(lead.service.name)
-    location_slug = _slug(lead.customer.location.name)
+    service_slug = url_slug(lead.service.name)
+    location_slug = url_slug(lead.customer.location.name)
 
     if channel == "google_ads":
         params.update(utm_source="google", utm_medium="cpc",
@@ -193,8 +192,8 @@ def _click_id(randomness: random.Random) -> str:
 
 
 def _entry_page(lead: Lead, randomness: random.Random) -> str:
-    service_slug = _slug(lead.service.name)
-    city_slug = _slug(lead.customer.service_area.city)
+    service_slug = url_slug(lead.service.name)
+    city_slug = url_slug(lead.customer.service_area.city)
     return randomness.choices(
         ("/", f"/{service_slug}/", f"/{service_slug}-{city_slug}-wa/"),
         weights=(30, 35, 35),
@@ -222,7 +221,7 @@ def _spam_submission(around: datetime, randomness: random.Random) -> _Submission
         "session_navigation": json.dumps(["/contact/"]),
         "entry_page": "/contact/",
         "submit_page": "/contact/",
-        "page_url": f"{SITE_URL}/contact/",
+        "page_url": f"{COMPANY_WEBSITE}/contact/",
         "ip_address": _documentation_ip_address(randomness),
         "user_agent": randomness.choice(USER_AGENTS),
         "mail_status": "sent",
@@ -232,12 +231,6 @@ def _spam_submission(around: datetime, randomness: random.Random) -> _Submission
 
 
 # --- Formatting ----------------------------------------------------------
-
-
-def _slug(text: str) -> str:
-    """'Outlet & Switch Installation' -> 'outlet-and-switch-installation'."""
-    text = text.lower().replace("&", "and")
-    return re.sub(r"[^a-z0-9]+", "-", text).strip("-")
 
 
 def _site_timestamp(moment: datetime) -> str:
