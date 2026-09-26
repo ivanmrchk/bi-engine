@@ -6,7 +6,9 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      # Host port 5434 so it doesn't clash with other local Postgres instances;
+      # containers still reach it at postgres:5432.
+      - "${POSTGRES_HOST_PORT:-5434}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
