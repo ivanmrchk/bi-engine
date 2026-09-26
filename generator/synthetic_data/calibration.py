@@ -41,6 +41,11 @@ LEAD_OUTCOME_SHARES = {
 
 ESTIMATE_VISIT_FEE_DOLLARS = 99
 
+# Share of lost leads that were sent a written estimate before going quiet.
+# Big projects are quoted up front far more often than service calls.
+LOST_LEAD_ESTIMATE_SHARE_FOR_BIG_PROJECTS = 0.50
+LOST_LEAD_ESTIMATE_SHARE_FOR_SERVICE_CALLS = 0.10
+
 # No real job is invoiced below this; smaller totals are estimate-only visits.
 MINIMUM_JOB_TICKET_DOLLARS = 150
 
@@ -78,6 +83,9 @@ class Service:
     Ticket prices follow a log-normal distribution: most jobs cost around
     the median, while a few large ones pull the average far above it.
     `ticket_price_spread` controls how long that expensive tail is.
+
+    Big projects are quoted with a written estimate before the work is
+    booked; service calls are usually priced on site.
     """
 
     name: str
@@ -85,6 +93,7 @@ class Service:
     median_ticket_dollars: int
     ticket_price_spread: float
     busiest_months: tuple[int, ...]
+    is_big_project: bool = False
 
 
 @dataclass(frozen=True)
@@ -152,11 +161,11 @@ SERVICES = (
     Service("Outlet & Switch Installation", 0.16, 1100, 0.90, (4, 7)),
     Service("Light Fixture Installation", 0.12, 1400, 0.85, (5, 6)),
     Service("Diagnostic Visit", 0.12, 850, 0.80, (1, 3)),
-    Service("EV Charger Installation", 0.08, 1900, 1.00, (5, 6, 9)),
-    Service("Panel Upgrade", 0.07, 6800, 0.70, (6, 8)),
-    Service("Heated Floor Wiring", 0.06, 2100, 0.90, (12, 1)),
-    Service("Commercial Electrical Work", 0.05, 1600, 0.90, ()),
-    Service("Generator Installation", 0.04, 3100, 0.40, (10, 11, 12)),
-    Service("Hot Tub Wiring", 0.04, 1800, 0.70, (4, 5)),
+    Service("EV Charger Installation", 0.08, 1900, 1.00, (5, 6, 9), is_big_project=True),
+    Service("Panel Upgrade", 0.07, 6800, 0.70, (6, 8), is_big_project=True),
+    Service("Heated Floor Wiring", 0.06, 2100, 0.90, (12, 1), is_big_project=True),
+    Service("Commercial Electrical Work", 0.05, 1600, 0.90, (), is_big_project=True),
+    Service("Generator Installation", 0.04, 3100, 0.40, (10, 11, 12), is_big_project=True),
+    Service("Hot Tub Wiring", 0.04, 1800, 0.70, (4, 5), is_big_project=True),
     Service("Circuit Breaker Replacement", 0.04, 1400, 0.80, ()),
 )

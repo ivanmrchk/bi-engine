@@ -1,7 +1,8 @@
-"""What actually happened: leads, and the jobs that came out of them.
+"""What actually happened: leads, estimates, and the jobs that came out of them.
 
-Every lead is someone asking for work. Most become a job in Housecall Pro;
-some of those jobs are canceled or end as a paid estimate, and the rest are
+Every lead is someone asking for work. Big projects are quoted with a
+written estimate first. Most leads become a job in Housecall Pro; some of
+those jobs are canceled or end as a paid estimate visit, and the rest are
 completed and invoiced. Like customers.py, this is the *truth* that each
 data source later reports in its own imperfect way.
 """
@@ -18,6 +19,8 @@ from synthetic_data.calibration import (
     ESTIMATE_VISIT_FEE_DOLLARS,
     LEAD_OUTCOME_SHARES,
     LOCATIONS,
+    LOST_LEAD_ESTIMATE_SHARE_FOR_BIG_PROJECTS,
+    LOST_LEAD_ESTIMATE_SHARE_FOR_SERVICE_CALLS,
     MARKETING_CHANNELS,
     MINIMUM_JOB_TICKET_DOLLARS,
     MONTHLY_DEMAND_MULTIPLIER,
@@ -49,10 +52,17 @@ class LeadOutcome(StrEnum):
     COMPLETED = "completed"
 
 
+class EstimateStatus(StrEnum):
+    APPROVED = "approved"
+    DECLINED = "declined"
+    NO_RESPONSE = "no_response"
+
+
 @dataclass(frozen=True)
 class Lead:
     lead_id: str
     customer: Customer
+    is_returning_customer: bool
     service: Service
     marketing_channel: MarketingChannel
     contact_method: ContactMethod
@@ -70,14 +80,24 @@ class Job:
 
 
 @dataclass(frozen=True)
+class Estimate:
+    estimate_id: str
+    lead: Lead
+    created_at: datetime
+    quoted_total_cents: int
+    status: EstimateStatus
+
+
+@dataclass(frozen=True)
 class CompanyHistory:
     customers: tuple[Customer, ...]
     leads: tuple[Lead, ...]
+    estimates: tuple[Estimate, ...]
     jobs: tuple[Job, ...]
 
 
 class CompanyHistoryGenerator:
-    """Simulates every lead and job, month by month."""
+    """Simulates every lead, estimate, and job, month by month."""
 
     def __init__(self, randomness: random.Random, customer_factory: CustomerFactory):
         self._randomness = randomness
@@ -88,8 +108,10 @@ class CompanyHistoryGenerator:
             location.name: [] for location in LOCATIONS
         }
         self._next_lead_number = count(start=1)
+        self._next_estimate_number = count(start=1)
         self._next_job_number = count(start=1)
         leads: list[Lead] = []
+        estimates: list[Estimate] = []
         jobs: list[Job] = []
 
         for month in simulated_months():
@@ -99,15 +121,19 @@ class CompanyHistoryGenerator:
                 for _ in range(self._lead_count_for(location, month)):
                     lead = self._create_lead(location, month)
                     leads.append(lead)
-                    if lead.outcome is not LeadOutcome.LOST:
-                        jobs.append(self._create_job(lead))
+                    job = None if lead.outcome is LeadOutcome.LOST else self._create_job(lead)
+                    if job is not None:
+                        jobs.append(job)
+                    estimate = self._create_estimate_if_quoted(lead, job)
+                    if estimate is not None:
+                        estimates.append(estimate)
 
         all_customers = [
             customer
             for location_customers in self._customers_by_location.values()
             for customer in location_customers
         ]
-        return CompanyHistory(tuple(all_customers), tuple(leads), tuple(jobs))
+        return CompanyHistory(tuple(all_customers), tuple(leads), tuple(estimates), tuple(jobs))
 
     # --- How many leads, and what kind -----------------------------------
 
@@ -119,10 +145,12 @@ class CompanyHistoryGenerator:
         return round(expected_leads * self._randomness.uniform(0.9, 1.1))
 
     def _create_lead(self, location: Location, month) -> Lead:
+        customer, is_returning_customer = self._pick_customer(location)
         marketing_channel = self._pick_marketing_channel(month)
         return Lead(
             lead_id=f"lead_{next(self._next_lead_number):05d}",
-            customer=self._pick_customer(location),
+            customer=customer,
+            is_returning_customer=is_returning_customer,
             service=self._pick_service(month),
             marketing_channel=marketing_channel,
             contact_method=self._pick_contact_method(marketing_channel),
@@ -130,13 +158,14 @@ class CompanyHistoryGenerator:
             outcome=self._pick_outcome(),
         )
 
-    def _pick_customer(self, location: Location) -> Customer:
+    def _pick_customer(self, location: Location) -> tuple[Customer, bool]:
+        """A past customer coming back, or a brand-new one. The flag says which."""
         location_customers = self._customers_by_location[location.name]
         if location_customers and self._randomness.random() < RETURNING_CUSTOMER_SHARE:
-            return self._randomness.choice(location_customers)
+            return self._randomness.choice(location_customers), True
         new_customer = self._customer_factory.create_customer(location)
         location_customers.append(new_customer)
-        return new_customer
+        return new_customer, False
 
     def _pick_service(self, month) -> Service:
         weights = [
@@ -186,6 +215,7 @@ class CompanyHistoryGenerator:
         return visit_day.replace(
             hour=self._randomness.randint(8, 15),
             minute=self._randomness.choice((0, 30)),
+            second=0,
         )
 
     def _ticket_price_cents(self, service: Service) -> int:
@@ -195,3 +225,41 @@ class CompanyHistoryGenerator:
             sigma=service.ticket_price_spread,
         )
         return round(max(price_dollars, MINIMUM_JOB_TICKET_DOLLARS) * 100)
+
+    # --- Written estimates -----------------------------------------------
+
+    def _create_estimate_if_quoted(self, lead: Lead, job: Job | None) -> Estimate | None:
+        """Who gets a written quote:
+        - a big project that went ahead: quoted first, then approved
+        - a paid estimate visit: quoted on site, then declined
+        - some lost leads: quoted, then declined or never answered
+        """
+        if lead.outcome is LeadOutcome.COMPLETED and lead.service.is_big_project:
+            quoted_at = lead.created_at + (job.scheduled_start - lead.created_at) * self._randomness.uniform(0.1, 0.6)
+            return self._estimate(lead, quoted_at, job.invoice_total_cents, EstimateStatus.APPROVED)
+
+        if lead.outcome is LeadOutcome.ESTIMATE_ONLY:
+            return self._estimate(
+                lead, job.completed_at, self._ticket_price_cents(lead.service), EstimateStatus.DECLINED
+            )
+
+        if lead.outcome is LeadOutcome.LOST and self._lost_lead_was_quoted(lead):
+            quoted_at = lead.created_at + timedelta(hours=self._randomness.randint(2, 48))
+            status = self._randomness.choice((EstimateStatus.DECLINED, EstimateStatus.NO_RESPONSE))
+            return self._estimate(lead, quoted_at, self._ticket_price_cents(lead.service), status)
+
+        return None
+
+    def _lost_lead_was_quoted(self, lead: Lead) -> bool:
+        if lead.service.is_big_project:
+            return self._randomness.random() < LOST_LEAD_ESTIMATE_SHARE_FOR_BIG_PROJECTS
+        return self._randomness.random() < LOST_LEAD_ESTIMATE_SHARE_FOR_SERVICE_CALLS
+
+    def _estimate(self, lead: Lead, created_at: datetime, quoted_total_cents: int, status: EstimateStatus) -> Estimate:
+        return Estimate(
+            estimate_id=f"est_{next(self._next_estimate_number):05d}",
+            lead=lead,
+            created_at=created_at,
+            quoted_total_cents=quoted_total_cents,
+            status=status,
+        )

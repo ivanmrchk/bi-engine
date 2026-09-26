@@ -9,7 +9,8 @@ import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from synthetic_data.jobs import CompanyHistory, Job, LeadOutcome
+from synthetic_data.customers import Customer
+from synthetic_data.jobs import CompanyHistory, Estimate, EstimateStatus, Job, Lead, LeadOutcome
 from synthetic_data.sources.formats import (
     city_as_typed_by_a_person,
     phone_as_typed_by_a_person,
@@ -18,8 +19,9 @@ from synthetic_data.sources.formats import (
 
 PAGE_SIZE = 200
 FIRST_INVOICE_NUMBER = 1001
+FIRST_ESTIMATE_NUMBER = 5001
 SHARE_OF_INVOICES_LEFT_UNPAID = 0.06
-SHARE_OF_JOBS_WITH_LEAD_SOURCE_LEFT_BLANK = 0.45
+SHARE_OF_RECORDS_WITH_LEAD_SOURCE_LEFT_BLANK = 0.45
 
 # The office picks a lead source from a dropdown, when they remember to.
 LEAD_SOURCE_AS_RECORDED_BY_OFFICE = {
@@ -50,6 +52,7 @@ JOB_DESCRIPTIONS = {
 class HousecallProExport:
     job_pages: list[dict]
     invoice_pages: list[dict]
+    estimate_pages: list[dict]
 
 
 def export_housecall_pro(history: CompanyHistory, randomness: random.Random) -> HousecallProExport:
@@ -62,10 +65,46 @@ def export_housecall_pro(history: CompanyHistory, randomness: random.Random) -> 
         if job.completed_at is not None:
             invoice_records.append(_invoice_record(job, invoice_number, paid_at, randomness))
 
+    estimate_records = [
+        _estimate_record(estimate, estimate_number, randomness)
+        for estimate_number, estimate in enumerate(history.estimates, start=FIRST_ESTIMATE_NUMBER)
+    ]
+
     return HousecallProExport(
         job_pages=_paginate(job_records, collection_name="jobs"),
         invoice_pages=_paginate(invoice_records, collection_name="invoices"),
+        estimate_pages=_paginate(estimate_records, collection_name="estimates"),
     )
+
+
+# --- Customers and addresses, as the office typed them --------------------
+
+
+def _customer_record(customer: Customer, randomness: random.Random) -> dict:
+    """Retyped on every job and estimate, so the same person's phone
+    number can be formatted differently from one record to the next."""
+    return {
+        "id": customer.customer_id,
+        "first_name": customer.first_name,
+        "last_name": customer.last_name,
+        "email": customer.email,
+        "mobile_number": phone_as_typed_by_a_person(customer.phone_numbers[0], randomness),
+        "home_number": (
+            phone_as_typed_by_a_person(customer.phone_numbers[1], randomness)
+            if len(customer.phone_numbers) > 1
+            else None
+        ),
+    }
+
+
+def _address_record(customer: Customer, randomness: random.Random) -> dict:
+    return {
+        "street": customer.street_address,
+        "city": city_as_typed_by_a_person(customer.service_area.city, randomness),
+        "state": randomness.choices(("WA", "wa", "Wa", None), weights=(90, 5, 2, 3))[0],
+        "zip": customer.zip_code,
+        "country": "US",
+    }
 
 
 # --- Jobs ----------------------------------------------------------------
@@ -80,25 +119,8 @@ def _job_record(job: Job, invoice_number: int, paid_at: datetime | None, randomn
         "id": job.job_id,
         "invoice_number": str(invoice_number),
         "description": _description(job, randomness),
-        "customer": {
-            "id": customer.customer_id,
-            "first_name": customer.first_name,
-            "last_name": customer.last_name,
-            "email": customer.email,
-            "mobile_number": phone_as_typed_by_a_person(customer.phone_numbers[0], randomness),
-            "home_number": (
-                phone_as_typed_by_a_person(customer.phone_numbers[1], randomness)
-                if len(customer.phone_numbers) > 1
-                else None
-            ),
-        },
-        "address": {
-            "street": customer.street_address,
-            "city": city_as_typed_by_a_person(customer.service_area.city, randomness),
-            "state": randomness.choices(("WA", "wa", "Wa", None), weights=(90, 5, 2, 3))[0],
-            "zip": customer.zip_code,
-            "country": "US",
-        },
+        "customer": _customer_record(customer, randomness),
+        "address": _address_record(customer, randomness),
         "work_status": _work_status(job, randomness),
         "schedule": {
             "scheduled_start": utc_timestamp(job.scheduled_start),
@@ -110,7 +132,7 @@ def _job_record(job: Job, invoice_number: int, paid_at: datetime | None, randomn
         },
         "total_amount": job.invoice_total_cents,
         "outstanding_balance": outstanding_balance,
-        "lead_source": _lead_source(job, randomness),
+        "lead_source": _lead_source(lead, randomness),
         "created_at": utc_timestamp(lead.created_at),
     }
 
@@ -130,10 +152,10 @@ def _work_status(job: Job, randomness: random.Random) -> str:
     return randomness.choices(("complete unrated", "complete rated"), weights=(75, 25))[0]
 
 
-def _lead_source(job: Job, randomness: random.Random) -> str | None:
-    if randomness.random() < SHARE_OF_JOBS_WITH_LEAD_SOURCE_LEFT_BLANK:
+def _lead_source(lead: Lead, randomness: random.Random) -> str | None:
+    if randomness.random() < SHARE_OF_RECORDS_WITH_LEAD_SOURCE_LEFT_BLANK:
         return None
-    return LEAD_SOURCE_AS_RECORDED_BY_OFFICE[job.lead.marketing_channel.name]
+    return LEAD_SOURCE_AS_RECORDED_BY_OFFICE[lead.marketing_channel.name]
 
 
 # --- Invoices ------------------------------------------------------------
@@ -174,6 +196,32 @@ def _line_items(job: Job, invoice_number: int, randomness: random.Random) -> lis
 
 def _line_item(invoice_number: int, position: int, name: str, item_type: str, amount_cents: int) -> dict:
     return {"id": f"item_{invoice_number}_{position}", "name": name, "type": item_type, "amount": amount_cents}
+
+
+# --- Estimates -----------------------------------------------------------
+
+
+def _estimate_record(estimate: Estimate, estimate_number: int, randomness: random.Random) -> dict:
+    """An estimate with a single option. Approval status is None while the
+    customer hasn't answered, which is how 'no response' looks in HCP."""
+    approval_status = None if estimate.status is EstimateStatus.NO_RESPONSE else str(estimate.status)
+    lead = estimate.lead
+    return {
+        "id": estimate.estimate_id,
+        "estimate_number": str(estimate_number),
+        "customer": _customer_record(lead.customer, randomness),
+        "address": _address_record(lead.customer, randomness),
+        "options": [
+            {
+                "id": f"option_{estimate_number}_1",
+                "name": randomness.choice(JOB_DESCRIPTIONS[lead.service.name]),
+                "total_amount": estimate.quoted_total_cents,
+                "approval_status": approval_status,
+            }
+        ],
+        "lead_source": _lead_source(lead, randomness),
+        "created_at": utc_timestamp(estimate.created_at),
+    }
 
 
 # --- Pagination ----------------------------------------------------------
