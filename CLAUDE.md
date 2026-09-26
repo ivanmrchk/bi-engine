@@ -55,6 +55,12 @@ docker compose up -d postgres qdrant
 
 # Apply pending migrations
 docker compose run --rm --no-deps api python -m app.migrations
+
+# Load data/raw into the raw tables (safe to re-run: stored files are skipped)
+docker compose run --rm --no-deps api python -m app.ingestion
+
+# Run the tests (from apps/api)
+python -m pytest
 ```
 
 ## Database
