@@ -11,6 +11,8 @@ from pathlib import Path
 
 from sqlalchemy import Engine, text
 
+from app.sql_scripts import run_sql_script
+
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
 CREATE_MIGRATIONS_TABLE = """
@@ -32,7 +34,7 @@ def apply_pending_migrations(engine: Engine) -> list[str]:
         if migration.name in already_applied:
             continue
         with engine.begin() as connection:  # the file and its record commit together, or not at all
-            connection.exec_driver_sql(migration.read_text(encoding="utf-8"))
+            run_sql_script(connection, migration.read_text(encoding="utf-8"))
             connection.execute(
                 text("INSERT INTO schema_migrations (file_name) VALUES (:file_name)"),
                 {"file_name": migration.name},
