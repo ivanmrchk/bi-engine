@@ -2,7 +2,7 @@
 
 import calendar
 import random
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from synthetic_data.calibration import FIRST_MONTH, LAST_MONTH
@@ -37,14 +37,28 @@ def blend(start_value: float, end_value: float, progress: float) -> float:
     return start_value + (end_value - start_value) * progress
 
 
+def simulated_days() -> list[date]:
+    """Every calendar day from the first through the last simulated month."""
+    last_day = _first_day_of_next_month(LAST_MONTH) - timedelta(days=1)
+    day_count = (last_day - FIRST_MONTH).days + 1
+    return [FIRST_MONTH + timedelta(days=offset) for offset in range(day_count)]
+
+
 def random_moment_in_month(month: date, randomness: random.Random) -> datetime:
-    """A random time during business hours (7am-7pm) on some day of the month."""
+    """A random time during business hours on some day of the month."""
     days_in_month = calendar.monthrange(month.year, month.month)[1]
+    day = month.replace(day=randomness.randint(1, days_in_month))
+    return random_moment_on_day(day, randomness)
+
+
+def random_moment_on_day(day: date, randomness: random.Random) -> datetime:
+    """A random time during business hours (7am-7pm), to the second."""
     return datetime(
-        month.year,
-        month.month,
-        randomness.randint(1, days_in_month),
+        day.year,
+        day.month,
+        day.day,
         randomness.randint(7, 18),
+        randomness.randint(0, 59),
         randomness.randint(0, 59),
         tzinfo=BUSINESS_TIMEZONE,
     )
