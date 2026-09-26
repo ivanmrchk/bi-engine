@@ -25,6 +25,8 @@ services:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/bi_engine
       QDRANT_URL: http://qdrant:6333
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - ./data/raw:/data/raw:ro  # generated source files, read-only inside the container
     depends_on:
       - postgres
       - qdrant
