@@ -1,12 +1,11 @@
 from dataclasses import dataclass
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, Query
 
+from app.analysis.city_diagnosis import LaggingCitiesReport, diagnose_cities
 from app.analysis.hot_services import ServiceMonth, hot_services
 from app.analysis.months import NotAMonth, parse_month
-from app.db import engine, get_session
-from app.services import analysis as analysis_service
+from app.db import engine
 
 router = APIRouter()
 
@@ -26,23 +25,26 @@ def get_hot_services(
     city: str | None = Query(None, description="One city, e.g. Bellevue; all when left out"),
 ) -> HotServicesReport:
     """Services ranked by revenue, against last month and the same month last year."""
-    try:
-        first_day = parse_month(month)
-    except NotAMonth as error:
-        raise HTTPException(status_code=422, detail=str(error))
+    first_day = _parse_month_or_422(month)
     with engine.connect() as connection:
         return HotServicesReport(month, location, city, hot_services(connection, first_day, location, city))
 
 
-@router.get("/lagging-locations")
-def lagging_locations(
-    month: str = Query(..., description="YYYY-MM"),
-    compare_to: str | None = Query(None, description="Defaults to the prior month"),
-    session: Session = Depends(get_session),
-):
-    compare_to = compare_to or analysis_service.previous_month(month)
-    return {
-        "month": month,
-        "compare_to": compare_to,
-        "locations": analysis_service.lagging_locations(session, month, compare_to),
-    }
+@router.get("/lagging-cities", response_model=LaggingCitiesReport)
+def get_lagging_cities(
+    month: str = Query(..., description="Last month of the period, YYYY-MM", examples=["2026-08"]),
+    months: int = Query(6, ge=3, le=12, description="How many months the period spans"),
+    location: str | None = Query(None, description="Eastside or South Sound; all when left out"),
+) -> LaggingCitiesReport:
+    """Each city's revenue against the same months a year before, and which
+    factor clearly fell: demand, conversion, or ticket size."""
+    last_month = _parse_month_or_422(month)
+    with engine.connect() as connection:
+        return diagnose_cities(connection, last_month, months, location)
+
+
+def _parse_month_or_422(month: str):
+    try:
+        return parse_month(month)
+    except NotAMonth as error:
+        raise HTTPException(status_code=422, detail=str(error))

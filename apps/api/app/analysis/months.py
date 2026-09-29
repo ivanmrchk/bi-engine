@@ -16,3 +16,9 @@ def parse_month(text: str) -> date:
     if match is None:
         raise NotAMonth(f"{text!r} is not a month in YYYY-MM form")
     return date(int(match.group(1)), int(match.group(2)), 1)
+
+
+def add_months(month: date, count: int) -> date:
+    """The first day of the month `count` months later (or earlier, if negative)."""
+    months_since_year_zero = month.year * 12 + (month.month - 1) + count
+    return date(months_since_year_zero // 12, months_since_year_zero % 12 + 1, 1)
