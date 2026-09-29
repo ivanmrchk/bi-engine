@@ -149,6 +149,32 @@ SOUTH_SOUND = Location(
 
 LOCATIONS = (EASTSIDE, SOUTH_SOUND)
 
+
+@dataclass(frozen=True)
+class CityStory:
+    """Something that happened to one city, planted for the analysis to find.
+
+    From `starts` on, each multiplier changes one part of the city's
+    revenue; 1.0 leaves it alone.
+    """
+
+    city: str
+    starts: date
+    what_happened: str
+    lead_share_multiplier: float = 1.0  # demand: how many people contact the company
+    estimate_only_multiplier: float = 1.0  # conversion: how often a visit ends as just an estimate
+    ticket_price_multiplier: float = 1.0  # ticket size: how much each job is worth
+
+
+CITY_STORIES = (
+    CityStory("Sammamish", date(2025, 12, 1), "its landing pages dropped out of Google",
+              lead_share_multiplier=0.25),
+    CityStory("Bellevue", date(2026, 1, 1), "a cheaper competitor arrived",
+              estimate_only_multiplier=5.0),
+    CityStory("Issaquah", date(2026, 2, 1), "work shifted to smaller jobs",
+              ticket_price_multiplier=0.5),
+)
+
 MARKETING_CHANNELS = (
     MarketingChannel("google_business_profile", 0.38, 0.32, 0.80),
     MarketingChannel("organic_search", 0.27, 0.22, 0.50),

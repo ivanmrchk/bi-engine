@@ -13,6 +13,7 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
+from synthetic_data.calibration import CITY_STORIES
 from synthetic_data.dataset import Dataset
 
 
@@ -75,6 +76,16 @@ def _write_answer_key(dataset: Dataset, answer_key_dir: Path) -> None:
              lead.lead_id in quoted_lead_ids,
              first_in_housecall_pro.get(lead.customer.customer_id, lead.created_at) < lead.created_at)
             for lead in history.leads
+        ),
+    )
+    _write_csv(
+        answer_key_dir / "planted_stories.csv",
+        ("city", "starts", "what_happened", "lead_share_multiplier",
+         "estimate_only_multiplier", "ticket_price_multiplier"),
+        (
+            (story.city, story.starts.isoformat(), story.what_happened, story.lead_share_multiplier,
+             story.estimate_only_multiplier, story.ticket_price_multiplier)
+            for story in CITY_STORIES
         ),
     )
     _write_csv(

@@ -24,6 +24,7 @@ from synthetic_data.calibration import (
     Location,
     Service,
 )
+from synthetic_data.city_stories import city_story_in_effect
 from synthetic_data.sources.formats import url_slug
 from synthetic_data.timeline import add_months, blend, progress_since, simulated_days
 
@@ -91,6 +92,7 @@ class _TrackedQuery:
     best_position: float
     service: Service | None = None  # None for brand searches
     location: Location | None = None  # None for searches that name no city
+    city: str | None = None  # the city named in the search, if any
 
 
 @dataclass(frozen=True)
@@ -150,6 +152,7 @@ def _tracked_queries() -> list[_TrackedQuery]:
                         best_position=BEST_POSITION_FOR_CITY_PAGE,
                         service=service,
                         location=location,
+                        city=area.city,
                     ))
     return queries
 
@@ -184,6 +187,8 @@ def _row_for(query: _TrackedQuery, day: date, randomness: random.Random) -> _Row
         return None
 
     expected_impressions = DAILY_IMPRESSIONS_SCALE * query.share_of_demand * _demand_multiplier(query.service, day)
+    if query.city is not None:  # a city whose pages dropped out of Google shows up far less
+        expected_impressions *= city_story_in_effect(query.city, day).lead_share_multiplier
     impressions = _poisson(expected_impressions, randomness)
     if impressions == 0:
         return None

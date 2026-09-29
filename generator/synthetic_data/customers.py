@@ -7,11 +7,13 @@ own quirks, which is exactly what the ingestion layer has to untangle.
 
 import random
 from dataclasses import dataclass
+from datetime import date
 from itertools import count
 
 from faker import Faker
 
 from synthetic_data.calibration import LOCATIONS, SECOND_PHONE_SHARE, Location, ServiceArea
+from synthetic_data.city_stories import city_story_in_effect
 
 
 @dataclass(frozen=True)
@@ -41,8 +43,8 @@ class CustomerFactory:
         # Business lines are taken, so no customer can share one.
         self._phone_numbers_in_use = {location.business_phone_number for location in LOCATIONS}
 
-    def create_customer(self, location: Location) -> Customer:
-        service_area = self._pick_service_area(location)
+    def create_customer(self, location: Location, day: date) -> Customer:
+        service_area = self._pick_service_area(location, day)
         first_name = self._fake.first_name()
         last_name = self._fake.last_name()
 
@@ -62,8 +64,11 @@ class CustomerFactory:
             zip_code=self._randomness.choice(service_area.zip_codes),
         )
 
-    def _pick_service_area(self, location: Location) -> ServiceArea:
-        weights = [area.share_of_location_customers for area in location.service_areas]
+    def _pick_service_area(self, location: Location, day: date) -> ServiceArea:
+        weights = [
+            area.share_of_location_customers * city_story_in_effect(area.city, day).lead_share_multiplier
+            for area in location.service_areas
+        ]
         return self._randomness.choices(location.service_areas, weights=weights)[0]
 
     def _new_phone_number(self, area_code: str) -> str:

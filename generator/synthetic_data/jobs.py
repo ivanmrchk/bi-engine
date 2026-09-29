@@ -30,6 +30,7 @@ from synthetic_data.calibration import (
     MarketingChannel,
     Service,
 )
+from synthetic_data.city_stories import city_story_in_effect
 from synthetic_data.customers import Customer, CustomerFactory
 from synthetic_data.timeline import (
     blend,
@@ -151,7 +152,7 @@ class CompanyHistoryGenerator:
         return round(expected_leads * self._randomness.uniform(0.9, 1.1))
 
     def _create_lead(self, location: Location, month, created_at: datetime) -> Lead:
-        customer, is_returning_customer = self._pick_customer(location)
+        customer, is_returning_customer = self._pick_customer(location, created_at)
         marketing_channel = self._pick_marketing_channel(month)
         return Lead(
             lead_id=f"lead_{next(self._next_lead_number):05d}",
@@ -161,15 +162,15 @@ class CompanyHistoryGenerator:
             marketing_channel=marketing_channel,
             contact_method=self._pick_contact_method(marketing_channel),
             created_at=created_at,
-            outcome=self._pick_outcome(),
+            outcome=self._pick_outcome(customer, created_at),
         )
 
-    def _pick_customer(self, location: Location) -> tuple[Customer, bool]:
+    def _pick_customer(self, location: Location, created_at: datetime) -> tuple[Customer, bool]:
         """A past customer coming back, or a brand-new one. The flag says which."""
         location_customers = self._customers_by_location[location.name]
         if location_customers and self._randomness.random() < RETURNING_CUSTOMER_SHARE:
             return self._randomness.choice(location_customers), True
-        new_customer = self._customer_factory.create_customer(location)
+        new_customer = self._customer_factory.create_customer(location, created_at.date())
         location_customers.append(new_customer)
         return new_customer, False
 
@@ -193,9 +194,14 @@ class CompanyHistoryGenerator:
             return ContactMethod.PHONE_CALL
         return ContactMethod.WEB_FORM
 
-    def _pick_outcome(self) -> LeadOutcome:
+    def _pick_outcome(self, customer: Customer, created_at: datetime) -> LeadOutcome:
+        story = city_story_in_effect(customer.service_area.city, created_at.date())
         outcomes = list(LeadOutcome)
-        weights = [LEAD_OUTCOME_SHARES[outcome] for outcome in outcomes]
+        weights = [
+            LEAD_OUTCOME_SHARES[outcome]
+            * (story.estimate_only_multiplier if outcome is LeadOutcome.ESTIMATE_ONLY else 1)
+            for outcome in outcomes
+        ]
         return self._randomness.choices(outcomes, weights=weights)[0]
 
     # --- What happened on the job ----------------------------------------
@@ -211,7 +217,7 @@ class CompanyHistoryGenerator:
         if lead.outcome is LeadOutcome.ESTIMATE_ONLY:
             invoice_total_cents = ESTIMATE_VISIT_FEE_DOLLARS * 100
         else:
-            invoice_total_cents = self._ticket_price_cents(lead.service)
+            invoice_total_cents = self._ticket_price_cents(lead)
 
         return Job(job_id, lead, scheduled_start, scheduled_start + visit_length, invoice_total_cents)
 
@@ -224,11 +230,12 @@ class CompanyHistoryGenerator:
             second=0,
         )
 
-    def _ticket_price_cents(self, service: Service) -> int:
+    def _ticket_price_cents(self, lead: Lead) -> int:
         """A log-normal price: usually near the median, occasionally far above it."""
-        price_dollars = self._randomness.lognormvariate(
-            mu=math.log(service.median_ticket_dollars),
-            sigma=service.ticket_price_spread,
+        story = city_story_in_effect(lead.customer.service_area.city, lead.created_at.date())
+        price_dollars = story.ticket_price_multiplier * self._randomness.lognormvariate(
+            mu=math.log(lead.service.median_ticket_dollars),
+            sigma=lead.service.ticket_price_spread,
         )
         return round(max(price_dollars, MINIMUM_JOB_TICKET_DOLLARS) * 100)
 
@@ -246,13 +253,13 @@ class CompanyHistoryGenerator:
 
         if lead.outcome is LeadOutcome.ESTIMATE_ONLY:
             return self._estimate(
-                lead, job.completed_at, self._ticket_price_cents(lead.service), EstimateStatus.DECLINED
+                lead, job.completed_at, self._ticket_price_cents(lead), EstimateStatus.DECLINED
             )
 
         if lead.outcome is LeadOutcome.LOST and self._lost_lead_was_quoted(lead):
             quoted_at = lead.created_at + timedelta(hours=self._randomness.randint(2, 48))
             status = self._randomness.choice((EstimateStatus.DECLINED, EstimateStatus.NO_RESPONSE))
-            return self._estimate(lead, quoted_at, self._ticket_price_cents(lead.service), status)
+            return self._estimate(lead, quoted_at, self._ticket_price_cents(lead), status)
 
         return None
 
