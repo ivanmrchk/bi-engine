@@ -4,36 +4,14 @@
     python -m app.ingestion --raw-dir PATH
 
 Safe to run any number of times: files already stored are skipped.
-Each file is stored in its own transaction, so one bad file is reported
-and skipped without undoing the others.
 """
 
 import argparse
 from pathlib import Path
 
-from sqlalchemy import Engine
-
 from app.config import settings
 from app.db import engine
-from app.ingestion.feeds import FEEDS, Feed
-from app.ingestion.raw_store import store_file
-
-
-def load_feed_directory(engine: Engine, raw_dir: Path, feed: Feed) -> tuple[int, int, list[str]]:
-    """(new files, already-stored files, failures) for one feed's folder."""
-    new_files, known_files, failures = 0, 0, []
-    for path in sorted((raw_dir / feed.folder).glob(feed.file_pattern)):
-        try:
-            with engine.begin() as connection:
-                stored = store_file(connection, feed, path.name, path.read_bytes())
-        except Exception as error:  # report and move on; the transaction already rolled back
-            failures.append(f"{path.name}: {error}")
-            continue
-        if stored.was_new:
-            new_files += 1
-        else:
-            known_files += 1
-    return new_files, known_files, failures
+from app.ingestion.raw_directory import load_raw_directory
 
 
 def main() -> None:
@@ -43,10 +21,10 @@ def main() -> None:
     arguments = parser.parse_args()
 
     print(f"Loading raw files from {arguments.raw_dir}")
-    for feed in FEEDS:
-        new_files, known_files, failures = load_feed_directory(engine, arguments.raw_dir, feed)
-        print(f"  {feed.name:28} {new_files:4} new, {known_files:4} already stored, {len(failures)} failed")
-        for failure in failures:
+    for result in load_raw_directory(engine, arguments.raw_dir):
+        print(f"  {result.feed:28} {result.new_files:4} new, {result.already_stored:4} already stored, "
+              f"{len(result.failures)} failed")
+        for failure in result.failures:
             print(f"      ! {failure}")
 
 
