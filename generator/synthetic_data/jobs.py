@@ -118,8 +118,14 @@ class CompanyHistoryGenerator:
             for location in LOCATIONS:
                 if month < location.opened_month:
                     continue
-                for _ in range(self._lead_count_for(location, month)):
-                    lead = self._create_lead(location, month)
+                # Leads are created in time order, so a returning customer
+                # can only come back after their earlier contact.
+                lead_times = sorted(
+                    random_moment_in_month(month, self._randomness)
+                    for _ in range(self._lead_count_for(location, month))
+                )
+                for created_at in lead_times:
+                    lead = self._create_lead(location, month, created_at)
                     leads.append(lead)
                     job = None if lead.outcome is LeadOutcome.LOST else self._create_job(lead)
                     if job is not None:
@@ -144,7 +150,7 @@ class CompanyHistoryGenerator:
         expected_leads = expected_jobs / LEAD_OUTCOME_SHARES[LeadOutcome.COMPLETED]
         return round(expected_leads * self._randomness.uniform(0.9, 1.1))
 
-    def _create_lead(self, location: Location, month) -> Lead:
+    def _create_lead(self, location: Location, month, created_at: datetime) -> Lead:
         customer, is_returning_customer = self._pick_customer(location)
         marketing_channel = self._pick_marketing_channel(month)
         return Lead(
@@ -154,7 +160,7 @@ class CompanyHistoryGenerator:
             service=self._pick_service(month),
             marketing_channel=marketing_channel,
             contact_method=self._pick_contact_method(marketing_channel),
-            created_at=random_moment_in_month(month, self._randomness),
+            created_at=created_at,
             outcome=self._pick_outcome(),
         )
 

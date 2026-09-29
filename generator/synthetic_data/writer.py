@@ -10,6 +10,7 @@ run can linger (Grasshopper file names depend on export times, for one).
 import csv
 import json
 import shutil
+from datetime import datetime
 from pathlib import Path
 
 from synthetic_data.dataset import Dataset
@@ -55,15 +56,34 @@ def _write_pages(directory: Path, pages: list[dict]) -> None:
 
 
 def _write_answer_key(dataset: Dataset, answer_key_dir: Path) -> None:
+    history = dataset.history
+    quoted_lead_ids = {estimate.lead.lead_id for estimate in history.estimates}
+    first_in_housecall_pro = _first_housecall_pro_record_by_customer(dataset)
+
+    # had_estimate and customer_had_earlier_hcp_record let grading use the
+    # business's view: a lead converted if it reached Housecall Pro at all,
+    # and a customer is "returning" only if they were in Housecall Pro before.
     _write_csv(
         answer_key_dir / "leads.csv",
         ("lead_id", "customer_id", "location", "city", "service", "marketing_channel",
-         "contact_method", "created_at", "outcome", "is_returning_customer"),
+         "contact_method", "created_at", "outcome", "is_returning_customer",
+         "had_estimate", "customer_had_earlier_hcp_record"),
         (
             (lead.lead_id, lead.customer.customer_id, lead.customer.location.name,
              lead.customer.service_area.city, lead.service.name, lead.marketing_channel.name,
-             lead.contact_method, lead.created_at.isoformat(), lead.outcome, lead.is_returning_customer)
-            for lead in dataset.history.leads
+             lead.contact_method, lead.created_at.isoformat(), lead.outcome, lead.is_returning_customer,
+             lead.lead_id in quoted_lead_ids,
+             first_in_housecall_pro.get(lead.customer.customer_id, lead.created_at) < lead.created_at)
+            for lead in history.leads
+        ),
+    )
+    _write_csv(
+        answer_key_dir / "jobs.csv",
+        ("job_id", "lead_id", "service", "location", "is_real_job"),
+        (
+            (job.job_id, job.lead.lead_id, job.lead.service.name, job.lead.customer.location.name,
+             job.lead.outcome == "completed")
+            for job in history.jobs
         ),
     )
     _write_csv(
@@ -85,6 +105,18 @@ def _write_answer_key(dataset: Dataset, answer_key_dir: Path) -> None:
             for submission_id, true_lead_id in dataset.website_leads.true_lead_id_by_submission_id.items()
         ),
     )
+
+
+def _first_housecall_pro_record_by_customer(dataset: Dataset) -> dict[str, datetime]:
+    """When each customer first appeared in Housecall Pro: their first job
+    (booked the moment the lead came in) or first estimate, whichever came first."""
+    record_times = [(job.lead.customer.customer_id, job.lead.created_at) for job in dataset.history.jobs]
+    record_times += [(estimate.lead.customer.customer_id, estimate.created_at) for estimate in dataset.history.estimates]
+    first_seen: dict[str, datetime] = {}
+    for customer_id, recorded_at in record_times:
+        if customer_id not in first_seen or recorded_at < first_seen[customer_id]:
+            first_seen[customer_id] = recorded_at
+    return first_seen
 
 
 # --- File helpers ----------------------------------------------------------
