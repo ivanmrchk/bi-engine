@@ -3,37 +3,69 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Local Business Intelligence Engine</title>
+  <title>Brightwire Electric · Monthly BI</title>
   <link rel="stylesheet" href="style.css" />
+  <script type="module" src="js/main.js"></script>
 </head>
 <body>
   <header>
-    <h1>Local Business Intelligence Engine</h1>
-    <p class="subtitle">Synthetic multi-location demo &mdash; hot services, lagging locations, and an AI-generated monthly brief.</p>
+    <h1>Brightwire Electric</h1>
+    <p class="meta">A fictional two-location electrical contractor. Synthetic data, real pipeline:
+      Housecall Pro, Grasshopper call logs, web forms and Search Console, through attribution and statistics, into a monthly brief.</p>
   </header>
 
-  <section class="controls">
-    <label>Month <input id="month-input" type="text" placeholder="2026-08" /></label>
-    <label>Location <input id="location-input" type="text" placeholder="austin-tx" /></label>
-    <button id="load-btn">Load analysis</button>
-    <button id="brief-btn">Generate brief</button>
-  </section>
+  <form class="filters" onsubmit="return false">
+    <label>Month <input id="month" type="month" required /></label>
+    <label>Location
+      <select id="location">
+        <option value="">Both locations</option>
+        <option>Eastside</option>
+        <option>South Sound</option>
+      </select>
+    </label>
+  </form>
 
-  <section class="panel">
-    <h2>Hot services this month</h2>
-    <div id="hot-services-table"><p class="empty">Load a month to see data.</p></div>
-  </section>
+  <main id="dashboard">
+    <section class="card brief-card" aria-labelledby="brief-title">
+      <h2 id="brief-title">This month's brief</h2>
+      <div id="brief"></div>
+    </section>
 
-  <section class="panel">
-    <h2>Lagging locations vs. prior month</h2>
-    <div id="lagging-table"><p class="empty">Load a month to see data.</p></div>
-  </section>
+    <section class="tiles" id="tiles" aria-label="Headline numbers"></section>
 
-  <section class="panel">
-    <h2>Monthly brief</h2>
-    <pre id="brief-output" class="empty">Pick a location and month, then click "Generate brief".</pre>
-  </section>
+    <div class="grid">
+      <section class="card" aria-labelledby="services-title">
+        <h2 id="services-title">Revenue by service</h2>
+        <div id="hot-services"></div>
+      </section>
 
-  <script src="app.js"></script>
+      <section class="card" aria-labelledby="cities-title">
+        <h2 id="cities-title">Cities against a year ago</h2>
+        <div id="lagging-cities"></div>
+      </section>
+
+      <section class="card" aria-labelledby="calls-title">
+        <h2 id="calls-title">How calls were handled</h2>
+        <p class="meta">Calls from leads and customers over the last 12 months. The AI call taker started in June 2025.</p>
+        <div id="call-handling"></div>
+      </section>
+
+      <section class="card" aria-labelledby="channels-title">
+        <h2 id="channels-title">Where leads came from</h2>
+        <div id="channels"></div>
+      </section>
+
+      <section class="card" aria-labelledby="coverage-title">
+        <h2 id="coverage-title">Grasshopper call exports</h2>
+        <form id="upload-form" class="upload">
+          <input id="upload-file" type="file" accept=".csv" aria-label="Grasshopper call-detail CSV" />
+          <button type="submit">Upload</button>
+        </form>
+        <div id="coverage"></div>
+      </section>
+    </div>
+  </main>
+
+  <div id="tooltip" role="tooltip" hidden></div>
 </body>
 </html>

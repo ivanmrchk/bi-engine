@@ -1,12 +1,13 @@
 from dataclasses import dataclass
 
 from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy import text
 
 from app.analysis.call_handling import CallHandlingMonth, call_handling_by_month
 from app.analysis.channel_funnel import ChannelFunnelReport, channel_funnel
 from app.analysis.city_diagnosis import LaggingCitiesReport, diagnose_cities
 from app.analysis.hot_services import ServiceMonth, hot_services
-from app.analysis.months import NotAMonth, parse_month
+from app.analysis.months import NotAMonth, add_months, parse_month
 from app.db import engine
 
 router = APIRouter()
@@ -18,6 +19,28 @@ class HotServicesReport:
     location: str | None
     city: str | None
     services: list[ServiceMonth]
+
+
+@dataclass(frozen=True)
+class AvailableMonths:
+    first_month: str | None  # YYYY-MM
+    last_month: str | None
+    # The newest month is still in progress, so views open on the one before it.
+    last_complete_month: str | None
+
+
+@router.get("/months", response_model=AvailableMonths)
+def get_available_months() -> AvailableMonths:
+    """The first and last months with completed jobs, for month pickers."""
+    with engine.connect() as connection:
+        first, last = connection.execute(text("SELECT min(month), max(month) FROM analytics.service_months")).one()
+    if first is None:
+        return AvailableMonths(None, None, None)
+    return AvailableMonths(
+        first_month=f"{first:%Y-%m}",
+        last_month=f"{last:%Y-%m}",
+        last_complete_month=f"{add_months(last, -1):%Y-%m}",
+    )
 
 
 @router.get("/hot-services", response_model=HotServicesReport)
