@@ -1,65 +1,40 @@
-import hashlib
-import uuid
+"""Searching what people wrote: technicians' job notes and the owner's monthly notes."""
 
-from fastapi import APIRouter, Depends
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PointStruct, VectorParams
+from datetime import date
 
-from app.config import settings
-from app.schemas import RagDoc, RagQuery
+from fastapi import APIRouter, HTTPException, Query
+
+from app.db import engine
+from app.rag.embeddings import EmbeddingsUnavailable
+from app.rag.note_index import IndexSync, NoteMatch, SearchFilters, qdrant_client, search_notes, sync_note_index
 
 router = APIRouter()
-COLLECTION = "bi_engine_notes"
-VECTOR_SIZE = 32
 
 
-def get_qdrant() -> QdrantClient:
-    return QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
+@router.post("/index", response_model=IndexSync)
+def index_notes() -> IndexSync:
+    """Embed new or edited notes into the search index and drop removed ones."""
+    try:
+        with engine.connect() as connection:
+            return sync_note_index(connection, qdrant_client())
+    except EmbeddingsUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error))
 
 
-def ensure_collection(client: QdrantClient) -> None:
-    if not client.collection_exists(COLLECTION):
-        client.create_collection(
-            collection_name=COLLECTION,
-            vectors_config=VectorParams(size=VECTOR_SIZE, distance=Distance.COSINE),
-        )
-
-
-def embed(text: str) -> list[float]:
-    """Placeholder embedding function so the API runs with zero paid keys.
-
-    Swap this for a real embeddings call (OpenAI text-embedding-3-small, or
-    any local model) once you're ready — everything else in this router
-    stays the same.
-    """
-    digest = hashlib.sha256(text.encode()).digest()
-    return [b / 255 for b in digest[:VECTOR_SIZE]]
-
-
-@router.post("/index")
-def index_doc(doc: RagDoc, client: QdrantClient = Depends(get_qdrant)):
-    ensure_collection(client)
-    point_id = str(uuid.uuid4())
-    client.upsert(
-        collection_name=COLLECTION,
-        points=[
-            PointStruct(
-                id=point_id,
-                vector=embed(doc.text),
-                payload={"text": doc.text, "location_id": doc.location_id},
-            )
-        ],
-    )
-    return {"id": point_id}
-
-
-@router.post("/query")
-def query_docs(q: RagQuery, client: QdrantClient = Depends(get_qdrant)):
-    ensure_collection(client)
-    hits = client.search(collection_name=COLLECTION, query_vector=embed(q.text), limit=q.top_k)
-    return {
-        "matches": [
-            {"score": h.score, "text": h.payload.get("text"), "location_id": h.payload.get("location_id")}
-            for h in hits
-        ]
-    }
+@router.get("/search", response_model=list[NoteMatch])
+def search(
+    q: str = Query(..., min_length=3, description="What to look for, in plain words",
+                   examples=["why are we losing jobs in Bellevue"]),
+    city: str | None = Query(None, examples=["Bellevue"]),
+    service: str | None = Query(None, examples=["Panel Upgrade"]),
+    location: str | None = Query(None, description="Eastside or South Sound"),
+    written_from: date | None = Query(None, description="YYYY-MM-DD"),
+    written_until: date | None = Query(None, description="YYYY-MM-DD"),
+    limit: int = Query(5, ge=1, le=20),
+) -> list[NoteMatch]:
+    """The notes closest in meaning to `q`, optionally narrowed by city, service, location, or date."""
+    filters = SearchFilters(city, service, location, written_from, written_until)
+    try:
+        return search_notes(qdrant_client(), q, filters, limit)
+    except EmbeddingsUnavailable as error:
+        raise HTTPException(status_code=503, detail=str(error))

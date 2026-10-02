@@ -25,7 +25,7 @@ SELECT
     (left(file.file_name, 7) || '-01')::DATE,
     city_mentioned.location_name,
     city_mentioned.city,
-    btrim(paragraph.text)
+    clean.blank_to_null(paragraph.text)
 FROM raw.ingested_files AS file
 JOIN raw.text_documents AS document USING (file_id)
 CROSS JOIN LATERAL regexp_split_to_table(document.body, '\n\s*\n') WITH ORDINALITY AS paragraph (text, position)
@@ -39,4 +39,4 @@ LEFT JOIN LATERAL (
 WHERE file.feed = 'owner_notes'
   AND file.file_name ~ '^\d{4}-\d{2}\.md$'
   AND clean.blank_to_null(paragraph.text) IS NOT NULL
-  AND btrim(paragraph.text) NOT LIKE '#%';
+  AND clean.blank_to_null(paragraph.text) NOT LIKE '#%';
