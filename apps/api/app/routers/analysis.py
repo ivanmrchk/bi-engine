@@ -2,6 +2,8 @@ from dataclasses import dataclass
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.analysis.call_handling import CallHandlingMonth, call_handling_by_month
+from app.analysis.channel_funnel import ChannelFunnelReport, channel_funnel
 from app.analysis.city_diagnosis import LaggingCitiesReport, diagnose_cities
 from app.analysis.hot_services import ServiceMonth, hot_services
 from app.analysis.months import NotAMonth, parse_month
@@ -41,6 +43,38 @@ def get_lagging_cities(
     last_month = _parse_month_or_422(month)
     with engine.connect() as connection:
         return diagnose_cities(connection, last_month, months, location)
+
+
+@router.get("/channel-funnel", response_model=ChannelFunnelReport)
+def get_channel_funnel(
+    first_month: str = Query(..., description="YYYY-MM", examples=["2026-03"]),
+    last_month: str = Query(..., description="YYYY-MM", examples=["2026-08"]),
+    location: str | None = Query(None, description="Eastside or South Sound; all when left out"),
+) -> ChannelFunnelReport:
+    """Leads, booked jobs, real jobs, and revenue for each marketing channel."""
+    first, last = _parse_month_range_or_422(first_month, last_month)
+    with engine.connect() as connection:
+        return channel_funnel(connection, first, last, location)
+
+
+@router.get("/call-handling", response_model=list[CallHandlingMonth])
+def get_call_handling(
+    first_month: str = Query(..., description="YYYY-MM", examples=["2025-01"]),
+    last_month: str = Query(..., description="YYYY-MM", examples=["2025-12"]),
+    location: str | None = Query(None, description="Eastside or South Sound; all when left out"),
+) -> list[CallHandlingMonth]:
+    """Each month's lead and customer calls: who answered, how many went
+    unanswered, and how fast the unanswered ones were called back."""
+    first, last = _parse_month_range_or_422(first_month, last_month)
+    with engine.connect() as connection:
+        return call_handling_by_month(connection, first, last, location)
+
+
+def _parse_month_range_or_422(first_month: str, last_month: str):
+    first, last = _parse_month_or_422(first_month), _parse_month_or_422(last_month)
+    if first > last:
+        raise HTTPException(status_code=422, detail=f"{first_month} comes after {last_month}")
+    return first, last
 
 
 def _parse_month_or_422(month: str):
