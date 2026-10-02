@@ -205,12 +205,9 @@ The wording varies from run to run; the facts behind it don't.
 
 ## How I built this with AI
 
-*Draft. Edit into your own words.*
-
-I built this with Claude Code as a pair programmer, deliberately, and
-with a few rules: I set the direction and made the domain calls, the AI
-proposed designs and wrote code, and every change came with an explanation
-I could follow line by line. I wanted to understand the code well enough to
+I built this with Claude Code, deliberately, and
+with a few rules: I set the direction and made the main calls, the AI
+proposed designs and wrote most of the code, and every change came with an explanation and reason. I wanted to understand the code well enough to
 defend every decision in it.
 
 The parts that made it more than generic were the ones only I could supply.
