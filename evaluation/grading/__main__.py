@@ -19,6 +19,7 @@ from grading.scores import (
     grade_spam_filter,
 )
 from grading.pipeline_results import fetch_pipeline_results
+from grading.stories import check_planted_stories
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATABASE_URL = "postgresql://postgres:postgres@localhost:5434/bi_engine"
@@ -49,6 +50,10 @@ def main() -> None:
           f"({whole_calls.correct} of {whole_calls.total} calls are exactly one conversation; "
           f"{split_sessions} conversations split)")
     _print_classification(grade_call_classification(results, key))
+
+    print("\nPlanted stories found by the analysis")
+    for check in check_planted_stories(arguments.answer_key, arguments.database_url):
+        print(f"  {'found  ' if check.found else 'MISSED '} {check.story}\n           {check.evidence}")
 
 
 def _print_detection(name: str, score: DetectionScore) -> None:

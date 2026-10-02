@@ -30,6 +30,26 @@ on a seed they never saw.
 Returning-customer leads are the known limit: a past customer who calls and
 never gets a quote or a job looks exactly like one asking about old work.
 
+## Planted stories
+
+The report also checks that the pipeline's own analyses find what the
+generator planted. Across four seeds:
+
+| Story | Expected finding | Found |
+|---|---|---|
+| Sammamish's landing pages drop out of Google | demand fell | 3 of 4 seeds |
+| A cheaper competitor reaches Bellevue | conversion fell | 3 of 4 |
+| Issaquah's work shifts to smaller jobs | ticket size fell | 4 of 4 |
+| The AI call taker is adopted | unanswered calls at least halve | 4 of 4 |
+| ChatGPT becomes a lead channel | at least 3x the leads of the first year | 4 of 4 |
+
+City stories are judged on six months of jobs against the same months a
+year earlier, and a factor only counts as a reason when its change is
+beyond chance (about two standard errors). With a few dozen jobs per city,
+a year-ago window that happened to be unusually bad or good can hide a real
+change, which is what the two misses are: the analysis reports no clear
+reason rather than a wrong one.
+
 ## Grading definitions
 
 - A lead **converted** if it reached Housecall Pro at all: a job or an estimate.

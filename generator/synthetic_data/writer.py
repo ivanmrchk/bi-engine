@@ -13,8 +13,9 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from synthetic_data.calibration import CITY_STORIES
+from synthetic_data.calibration import CITY_STORIES, LAST_MONTH
 from synthetic_data.dataset import Dataset
+from synthetic_data.sources.grasshopper_calls import AI_CALL_TAKER_ADOPTED_ON
 
 
 def write_dataset(dataset: Dataset, data_dir: Path) -> None:
@@ -76,6 +77,14 @@ def _write_answer_key(dataset: Dataset, answer_key_dir: Path) -> None:
              lead.lead_id in quoted_lead_ids,
              first_in_housecall_pro.get(lead.customer.customer_id, lead.created_at) < lead.created_at)
             for lead in history.leads
+        ),
+    )
+    _write_csv(
+        answer_key_dir / "company_facts.csv",
+        ("fact", "value"),
+        (
+            ("last_simulated_month", LAST_MONTH.isoformat()),
+            ("ai_call_taker_adopted_on", AI_CALL_TAKER_ADOPTED_ON.isoformat()),
         ),
     )
     _write_csv(
