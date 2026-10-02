@@ -48,6 +48,9 @@ def _write_raw_files(dataset: Dataset, raw_dir: Path) -> None:
         _write_json(search_console_dir / "by_date" / file_name, search_day.totals_response)
         _write_json(search_console_dir / "by_query_page" / file_name, search_day.query_page_response)
 
+    for month, note in dataset.owner_notes.items():
+        _write_text(raw_dir / "owner_notes" / f"{month:%Y-%m}.md", note)
+
 
 def _write_pages(directory: Path, pages: list[dict]) -> None:
     for page_number, page in enumerate(pages, start=1):

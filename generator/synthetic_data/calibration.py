@@ -164,15 +164,24 @@ class CityStory:
     lead_share_multiplier: float = 1.0  # demand: how many people contact the company
     estimate_only_multiplier: float = 1.0  # conversion: how often a visit ends as just an estimate
     ticket_price_multiplier: float = 1.0  # ticket size: how much each job is worth
+    owner_note: str = ""  # what the owner writes about it, a month after it starts
 
+
+COMPETITOR_NAME = "Lowline Electric"  # fictional
 
 CITY_STORIES = (
     CityStory("Sammamish", date(2025, 12, 1), "its landing pages dropped out of Google",
-              lead_share_multiplier=0.25),
+              lead_share_multiplier=0.25,
+              owner_note="Sammamish has gone quiet. Barely any new calls from there this month "
+                         "and I can't tell why; the regulars still call."),
     CityStory("Bellevue", date(2026, 1, 1), "a cheaper competitor arrived",
-              estimate_only_multiplier=5.0),
+              estimate_only_multiplier=5.0,
+              owner_note=f"Losing estimates in Bellevue. Several customers said {COMPETITOR_NAME} "
+                         "quoted them well under us. Need to decide whether to match."),
     CityStory("Issaquah", date(2026, 2, 1), "work shifted to smaller jobs",
-              ticket_price_multiplier=0.5),
+              ticket_price_multiplier=0.5,
+              owner_note="Plenty of Issaquah work but it's all small stuff lately: fixture swaps, "
+                         "a couple of outlets. Tickets are way down from last year."),
 )
 
 MARKETING_CHANNELS = (

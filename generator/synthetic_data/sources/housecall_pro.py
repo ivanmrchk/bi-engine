@@ -55,13 +55,15 @@ class HousecallProExport:
     estimate_pages: list[dict]
 
 
-def export_housecall_pro(history: CompanyHistory, randomness: random.Random) -> HousecallProExport:
+def export_housecall_pro(
+    history: CompanyHistory, notes_by_job: dict[str, tuple[str, ...]], randomness: random.Random
+) -> HousecallProExport:
     job_records = []
     invoice_records = []
 
     for invoice_number, job in enumerate(history.jobs, start=FIRST_INVOICE_NUMBER):
         paid_at = _paid_at(job, randomness)
-        job_records.append(_job_record(job, invoice_number, paid_at, randomness))
+        job_records.append(_job_record(job, invoice_number, paid_at, notes_by_job.get(job.job_id, ()), randomness))
         if job.completed_at is not None:
             invoice_records.append(_invoice_record(job, invoice_number, paid_at, randomness))
 
@@ -110,7 +112,9 @@ def _address_record(customer: Customer, randomness: random.Random) -> dict:
 # --- Jobs ----------------------------------------------------------------
 
 
-def _job_record(job: Job, invoice_number: int, paid_at: datetime | None, randomness: random.Random) -> dict:
+def _job_record(
+    job: Job, invoice_number: int, paid_at: datetime | None, notes: tuple[str, ...], randomness: random.Random
+) -> dict:
     lead = job.lead
     customer = lead.customer
     outstanding_balance = 0 if paid_at else job.invoice_total_cents
@@ -133,6 +137,10 @@ def _job_record(job: Job, invoice_number: int, paid_at: datetime | None, randomn
         "total_amount": job.invoice_total_cents,
         "outstanding_balance": outstanding_balance,
         "lead_source": _lead_source(lead, randomness),
+        "notes": [
+            {"id": f"note_{job.job_id}_{position}", "content": content}
+            for position, content in enumerate(notes, start=1)
+        ],
         "created_at": utc_timestamp(lead.created_at),
     }
 

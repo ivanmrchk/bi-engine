@@ -30,8 +30,10 @@ def store_file(connection: Connection, feed: Feed, file_name: str, content: byte
 
     if feed.file_format is FileFormat.JSON:
         _store_json_document(connection, file_id, content)
-    else:
+    elif feed.file_format is FileFormat.GRASSHOPPER_REPORT:
         _store_grasshopper_rows(connection, file_id, content)
+    elif feed.file_format is FileFormat.TEXT:
+        _store_text_document(connection, file_id, content)
     return StoredFile(file_name, was_new=True, file_id=file_id)
 
 
@@ -53,6 +55,13 @@ def _store_json_document(connection: Connection, file_id: int, content: bytes) -
     connection.execute(
         text("INSERT INTO raw.json_documents (file_id, body) VALUES (:file_id, CAST(:body AS JSONB))"),
         {"file_id": file_id, "body": content.decode("utf-8")},
+    )
+
+
+def _store_text_document(connection: Connection, file_id: int, content: bytes) -> None:
+    connection.execute(
+        text("INSERT INTO raw.text_documents (file_id, body) VALUES (:file_id, :body)"),
+        {"file_id": file_id, "body": content.decode("utf-8-sig")},
     )
 
 

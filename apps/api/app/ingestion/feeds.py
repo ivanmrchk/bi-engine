@@ -11,6 +11,7 @@ from enum import StrEnum
 class FileFormat(StrEnum):
     JSON = "json"
     GRASSHOPPER_REPORT = "grasshopper_report"
+    TEXT = "text"
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,8 @@ SEARCH_CONSOLE_QUERY_PAGES = Feed(
     "search_console_query_pages", "search_console/by_query_page", "*.json", FileFormat.JSON
 )
 
+OWNER_NOTES = Feed("owner_notes", "owner_notes", "*.md", FileFormat.TEXT)
+
 FEEDS = (
     HOUSECALL_PRO_JOBS,
     HOUSECALL_PRO_INVOICES,
@@ -39,4 +42,5 @@ FEEDS = (
     WEBSITE_LEADS,
     SEARCH_CONSOLE_TOTALS,
     SEARCH_CONSOLE_QUERY_PAGES,
+    OWNER_NOTES,
 )
