@@ -25,6 +25,7 @@ def index_notes() -> IndexSync:
 def search(
     q: str = Query(..., min_length=3, description="What to look for, in plain words",
                    examples=["why are we losing jobs in Bellevue"]),
+    kind: str | None = Query(None, description="job_note or owner_note"),
     city: str | None = Query(None, examples=["Bellevue"]),
     service: str | None = Query(None, examples=["Panel Upgrade"]),
     location: str | None = Query(None, description="Eastside or South Sound"),
@@ -32,8 +33,15 @@ def search(
     written_until: date | None = Query(None, description="YYYY-MM-DD"),
     limit: int = Query(5, ge=1, le=20),
 ) -> list[NoteMatch]:
-    """The notes closest in meaning to `q`, optionally narrowed by city, service, location, or date."""
-    filters = SearchFilters(city, service, location, written_from, written_until)
+    """The notes closest in meaning to `q`, optionally narrowed by kind, city, service, location, or date."""
+    filters = SearchFilters(
+        kind=kind,
+        city=city,
+        service=service,
+        location=location,
+        written_from=written_from,
+        written_until=written_until,
+    )
     try:
         return search_notes(qdrant_client(), q, filters, limit)
     except EmbeddingsUnavailable as error:

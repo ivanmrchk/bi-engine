@@ -50,6 +50,7 @@ class IndexSync:
 
 @dataclass(frozen=True)
 class SearchFilters:
+    kind: str | None = None  # 'job_note' or 'owner_note'
     city: str | None = None
     service: str | None = None
     location: str | None = None
@@ -152,7 +153,9 @@ def point_id(note_id: str, body: str) -> str:
 def search_filter(filters: SearchFilters) -> Filter | None:
     conditions = [
         FieldCondition(key=field, match=MatchValue(value=value))
-        for field, value in (("city", filters.city), ("service", filters.service), ("location", filters.location))
+        for field, value in (
+            ("kind", filters.kind), ("city", filters.city), ("service", filters.service), ("location", filters.location)
+        )
         if value is not None
     ]
     if filters.written_from or filters.written_until:
