@@ -45,3 +45,9 @@ def test_the_right_key_gets_past_the_check(relay_key):
     response = client.post("/ingest/no_such_feed", files=UPLOAD, headers={"X-Relay-Ingest-Key": "test-relay-key"})
 
     assert response.status_code == 404
+
+
+def test_the_rebuild_after_a_pull_needs_the_key_too(relay_key):
+    response = client.post("/ingest/rebuild")
+
+    assert response.status_code == 401

@@ -53,6 +53,11 @@ class FeedUploadResult:
     was_new: bool
 
 
+@dataclass(frozen=True)
+class RebuildResult:
+    clean_table_rows: dict[str, int]
+
+
 @router.post("/grasshopper", response_model=GrasshopperUploadResult)
 def upload_grasshopper_export(file: UploadFile) -> GrasshopperUploadResult:
     """Store one Grasshopper call-detail export and rebuild the clean layer.
@@ -99,10 +104,18 @@ def _require_relay_ingest_key(x_relay_ingest_key: Annotated[str | None, Header()
         raise HTTPException(status_code=401, detail="missing or wrong X-Relay-Ingest-Key")
 
 
+@router.post("/rebuild", response_model=RebuildResult, dependencies=[Depends(_require_relay_ingest_key)])
+def rebuild_after_relay_pull() -> RebuildResult:
+    """Rebuild the clean layer once, after relay-engine uploaded a pull's pages with rebuild=false."""
+    with engine.begin() as connection:
+        rebuild_clean_layer(connection)
+        return RebuildResult(clean_table_row_counts(connection))
+
+
 @router.post(
     "/{feed_name}", response_model=FeedUploadResult, dependencies=[Depends(_require_relay_ingest_key)]
 )
-def upload_feed_file(feed_name: str, file: UploadFile) -> FeedUploadResult:
+def upload_feed_file(feed_name: str, file: UploadFile, rebuild: bool = True) -> FeedUploadResult:
     """Store one file for any feed except Grasshopper, which has its own endpoint above.
 
     This is relay-engine's (a separate repo) only way in: it fetches from
@@ -110,13 +123,17 @@ def upload_feed_file(feed_name: str, file: UploadFile) -> FeedUploadResult:
     each page here as soon as it has it, one file at a time, instead of
     writing to the raw data directory directly. Uploading a file that's
     already stored for this feed changes nothing.
+
+    A rebuild takes about 20 seconds, so rebuilding after every page would
+    make a 30-page pull take ten minutes. A multi-page pull passes
+    rebuild=false on each page and calls POST /ingest/rebuild once at the end.
     """
     feed = _feed_for_upload(feed_name)
     file_name = file.filename or f"{feed_name}.json"
     try:
         with engine.begin() as connection:  # the file and the rebuild succeed together, or not at all
             stored = store_file(connection, feed, file_name, file.file.read())
-            if stored.was_new:
+            if stored.was_new and rebuild:
                 rebuild_clean_layer(connection)
     except UnicodeDecodeError as error:
         raise HTTPException(status_code=422, detail=f"{file_name} isn't valid text for the {feed_name} feed: {error}")

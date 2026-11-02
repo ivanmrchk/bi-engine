@@ -133,6 +133,7 @@ Clean-layer conventions:
 - Synthetic data uses only reserved fictional values: 555 phone numbers,
   `example.com/.net/.org` emails, the `.example` domain, RFC 5737 IP addresses.
 - Never commit real exports, client data, or anything under `data/`.
-- relay-engine's uploads (`POST /ingest/{feed_name}`) carry real customer
-  data: they need `X-Relay-Ingest-Key` matching `RELAY_INGEST_KEY`, and are
-  refused while it's unset.
+- relay-engine's uploads (`POST /ingest/{feed_name}`, `POST /ingest/rebuild`)
+  carry real customer data: they need `X-Relay-Ingest-Key` matching
+  `RELAY_INGEST_KEY`, and are refused while it's unset. A multi-page pull
+  uploads with `?rebuild=false` and rebuilds once at the end.
