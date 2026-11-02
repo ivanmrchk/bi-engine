@@ -1,8 +1,13 @@
-"""Getting data in: owner uploads of Grasshopper exports, and full pipeline runs.
+"""Getting data in: owner uploads of Grasshopper exports, relay-engine's
+feed uploads, and full pipeline runs.
 
 The endpoints are plain `def`, not `async def`: storing and rebuilding
 block on the database for seconds, and FastAPI runs plain functions in a
 worker thread so they don't stall every other request meanwhile.
+
+/{feed_name} is a catch-all path, so it's registered last: a path like
+/run or /coverage must match its own literal route first, or this one
+would swallow it.
 """
 
 from dataclasses import dataclass
@@ -13,7 +18,7 @@ from app.clean_layer.rebuild import clean_table_row_counts, rebuild_clean_layer
 from app.config import settings
 from app.db import engine
 from app.ingestion.coverage import CallCoverage, call_coverage
-from app.ingestion.feeds import GRASSHOPPER_CALLS
+from app.ingestion.feeds import Feed, GRASSHOPPER_CALLS, feed_by_name
 from app.ingestion.grasshopper_report import NotAGrasshopperReport
 from app.ingestion.raw_directory import FeedLoadResult, load_raw_directory
 from app.ingestion.raw_store import store_file
@@ -33,6 +38,13 @@ class PipelineRunResult:
     feeds: list[FeedLoadResult]
     clean_table_rows: dict[str, int]
     coverage: CallCoverage
+
+
+@dataclass(frozen=True)
+class FeedUploadResult:
+    feed: str
+    file_name: str
+    was_new: bool
 
 
 @router.post("/grasshopper", response_model=GrasshopperUploadResult)
@@ -69,3 +81,35 @@ def get_call_coverage() -> CallCoverage:
     """Which stretches of time no Grasshopper export covers."""
     with engine.connect() as connection:
         return call_coverage(connection)
+
+
+@router.post("/{feed_name}", response_model=FeedUploadResult)
+def upload_feed_file(feed_name: str, file: UploadFile) -> FeedUploadResult:
+    """Store one file for any feed except Grasshopper, which has its own endpoint above.
+
+    This is relay-engine's (a separate repo) only way in: it fetches from
+    Housecall Pro, the website lead form, and Search Console, and POSTs
+    each page here as soon as it has it, one file at a time, instead of
+    writing to the raw data directory directly. Uploading a file that's
+    already stored for this feed changes nothing.
+    """
+    feed = _feed_for_upload(feed_name)
+    file_name = file.filename or f"{feed_name}.json"
+    try:
+        with engine.begin() as connection:  # the file and the rebuild succeed together, or not at all
+            stored = store_file(connection, feed, file_name, file.file.read())
+            if stored.was_new:
+                rebuild_clean_layer(connection)
+    except UnicodeDecodeError as error:
+        raise HTTPException(status_code=422, detail=f"{file_name} isn't valid text for the {feed_name} feed: {error}")
+
+    return FeedUploadResult(feed.name, file_name, stored.was_new)
+
+
+def _feed_for_upload(feed_name: str) -> Feed:
+    feed = feed_by_name(feed_name)
+    if feed is None:
+        raise HTTPException(status_code=404, detail=f"no such feed: {feed_name}")
+    if feed is GRASSHOPPER_CALLS:
+        raise HTTPException(status_code=400, detail="grasshopper exports go through POST /ingest/grasshopper")
+    return feed

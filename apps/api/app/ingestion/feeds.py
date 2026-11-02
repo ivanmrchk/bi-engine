@@ -44,3 +44,7 @@ FEEDS = (
     SEARCH_CONSOLE_QUERY_PAGES,
     OWNER_NOTES,
 )
+
+
+def feed_by_name(name: str) -> Feed | None:
+    return next((feed for feed in FEEDS if feed.name == name), None)
