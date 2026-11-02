@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     brief_model: str = "gpt-5.4-mini-2026-03-17"
     allowed_origins: list[str] = ["http://localhost:8080", "http://localhost:5173"]
     raw_data_dir: Path = Path("/data/raw")  # where docker compose mounts ./data/raw
+    # The shared secret relay-engine sends with every upload; while it's unset, its uploads are refused.
+    relay_ingest_key: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="", extra="ignore")
 

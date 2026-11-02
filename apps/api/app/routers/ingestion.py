@@ -8,11 +8,17 @@ worker thread so they don't stall every other request meanwhile.
 /{feed_name} is a catch-all path, so it's registered last: a path like
 /run or /coverage must match its own literal route first, or this one
 would swallow it.
+
+relay-engine's uploads carry real customer data, so they need the shared
+key in X-Relay-Ingest-Key. The owner's Grasshopper upload stays open: the
+dashboard has no secret it could keep.
 """
 
+import secrets
 from dataclasses import dataclass
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile
 
 from app.clean_layer.rebuild import clean_table_row_counts, rebuild_clean_layer
 from app.config import settings
@@ -83,7 +89,19 @@ def get_call_coverage() -> CallCoverage:
         return call_coverage(connection)
 
 
-@router.post("/{feed_name}", response_model=FeedUploadResult)
+def _require_relay_ingest_key(x_relay_ingest_key: Annotated[str | None, Header()] = None) -> None:
+    if not settings.relay_ingest_key:
+        raise HTTPException(status_code=503, detail="relay uploads are turned off: RELAY_INGEST_KEY isn't set")
+    # compare_digest takes as long for a near-miss as for a wild guess, so timing gives nothing away.
+    if x_relay_ingest_key is None or not secrets.compare_digest(
+        x_relay_ingest_key.encode(), settings.relay_ingest_key.encode()
+    ):
+        raise HTTPException(status_code=401, detail="missing or wrong X-Relay-Ingest-Key")
+
+
+@router.post(
+    "/{feed_name}", response_model=FeedUploadResult, dependencies=[Depends(_require_relay_ingest_key)]
+)
 def upload_feed_file(feed_name: str, file: UploadFile) -> FeedUploadResult:
     """Store one file for any feed except Grasshopper, which has its own endpoint above.
 
